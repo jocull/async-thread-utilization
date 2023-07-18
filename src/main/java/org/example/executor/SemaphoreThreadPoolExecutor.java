@@ -7,7 +7,11 @@ import java.util.concurrent.TimeUnit;
 
 public class SemaphoreThreadPoolExecutor extends ThreadPoolExecutor {
     public SemaphoreThreadPoolExecutor(int poolSize, int parallelism) {
-        super(poolSize, poolSize, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new SemaphoreThreadFactory(new Semaphore(parallelism, true)));
+        this(poolSize, new Semaphore(parallelism, true));
+    }
+
+    public SemaphoreThreadPoolExecutor(int poolSize, Semaphore semaphore) {
+        super(poolSize, poolSize, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new SemaphoreThreadFactory(semaphore));
     }
 
     @Override
