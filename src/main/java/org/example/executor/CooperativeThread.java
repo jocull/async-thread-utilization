@@ -21,12 +21,25 @@ public class CooperativeThread extends Thread {
     }
 
     /* package-private */
-    static CooperativeThreadControl getCooperativeThreadControl() {
-        return getCooperativeThreadControl(Thread.currentThread());
+    static CooperativeThreadControl getCooperativeThreadControlOrNull() {
+        return getCooperativeThreadControlOrNull(Thread.currentThread());
     }
 
     /* package-private */
-    static CooperativeThreadControl getCooperativeThreadControl(Thread thread) {
+    static CooperativeThreadControl getCooperativeThreadControlOrNull(Thread thread) {
+        if (thread instanceof CooperativeThread) {
+            return ((CooperativeThread) thread).control;
+        }
+        return null;
+    }
+
+    /* package-private */
+    static CooperativeThreadControl getCooperativeThreadControlOrThrow() {
+        return getCooperativeThreadControlOrThrow(Thread.currentThread());
+    }
+
+    /* package-private */
+    static CooperativeThreadControl getCooperativeThreadControlOrThrow(Thread thread) {
         if (thread instanceof CooperativeThread) {
             return ((CooperativeThread) thread).control;
         }
@@ -35,8 +48,23 @@ public class CooperativeThread extends Thread {
                 + " \"" + thread.getName() + "\"");
     }
 
+    // TODO: Would need to implement similar methods for other overloads...
+    public static <T> T tryYieldFor(InterruptibleSupplier<T> supplier) throws InterruptedException {
+        final CooperativeThreadControl control = getCooperativeThreadControlOrNull();
+        if (control == null) {
+            return supplier.get();
+        }
+
+        control.releaseTime();
+        try {
+            return supplier.get();
+        } finally {
+            control.requestTime();
+        }
+    }
+
     public static void yieldFor(InterruptibleRunnable runnable) throws InterruptedException {
-        final CooperativeThreadControl control = getCooperativeThreadControl();
+        final CooperativeThreadControl control = getCooperativeThreadControlOrThrow();
         control.releaseTime();
         try {
             runnable.run();
@@ -46,7 +74,7 @@ public class CooperativeThread extends Thread {
     }
 
     public static <T> T yieldFor(InterruptibleSupplier<T> supplier) throws InterruptedException {
-        final CooperativeThreadControl control = getCooperativeThreadControl();
+        final CooperativeThreadControl control = getCooperativeThreadControlOrThrow();
         control.releaseTime();
         try {
             return supplier.get();
@@ -56,7 +84,7 @@ public class CooperativeThread extends Thread {
     }
 
     public static <T> T yieldFor(Future<T> future) throws InterruptedException, ExecutionException {
-        final CooperativeThreadControl control = getCooperativeThreadControl();
+        final CooperativeThreadControl control = getCooperativeThreadControlOrThrow();
         control.releaseTime();
         try {
             return future.get();
@@ -66,7 +94,7 @@ public class CooperativeThread extends Thread {
     }
 
     public static <T> T yieldFor(CompletableFuture<T> future) throws InterruptedException {
-        final CooperativeThreadControl control = getCooperativeThreadControl();
+        final CooperativeThreadControl control = getCooperativeThreadControlOrThrow();
         control.releaseTime();
         try {
             return future.join();

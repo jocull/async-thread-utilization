@@ -16,7 +16,7 @@ public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
     @Override
     protected void beforeExecute(Thread t, Runnable r) {
         try {
-            CooperativeThread.getCooperativeThreadControl(t).requestTime();
+            CooperativeThread.getCooperativeThreadControlOrThrow(t).requestTime();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -25,7 +25,7 @@ public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
 
     @Override
     protected void afterExecute(Runnable r, Throwable t) {
-        CooperativeThread.getCooperativeThreadControl().releaseTime();
+        CooperativeThread.getCooperativeThreadControlOrThrow().releaseTime();
         super.afterExecute(r, t);
     }
 }
