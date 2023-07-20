@@ -1,7 +1,7 @@
 package org.example.executor;
 
 public interface CooperativeThreadControl {
-    void requestTime() throws InterruptedException;
+    void requestTime();
 
     void releaseTime();
 

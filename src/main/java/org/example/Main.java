@@ -12,8 +12,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -23,11 +27,19 @@ public class Main implements CommandLineRunner {
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
     private RestTemplate restTemplate;
+    static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    // static final ExecutorService executor = new CooperativeThreadPoolExecutor(1000, Runtime.getRuntime().availableProcessors() * 2);
+    static final ExecutorService executor = Executors.newFixedThreadPool(1000);
 
     public static void main(String[] args) {
-        LOGGER.info("STARTING THE APPLICATION");
-        SpringApplication.run(Main.class, args);
-        LOGGER.info("APPLICATION FINISHED");
+        try {
+            LOGGER.info("STARTING THE APPLICATION");
+            SpringApplication.run(Main.class, args);
+            LOGGER.info("APPLICATION FINISHED");
+        } finally {
+            executor.shutdown();
+            scheduledExecutor.shutdown();
+        }
     }
 
     @Override
@@ -40,46 +52,66 @@ public class Main implements CommandLineRunner {
         final HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
         requestFactory.setConnectTimeout(5_000);
         requestFactory.setReadTimeout(5_000);
-        requestFactory.setConnectionRequestTimeout(30_000);
+        requestFactory.setConnectionRequestTimeout(0);
 
         restTemplate = new RestTemplate(requestFactory);
+        restTemplate.setMessageConverters(List.of(
+                new CooperativeGsonHttpMessageConverter()
+        ));
 
+        final AtomicInteger progress = new AtomicInteger();
         final AtomicLong lastHeartbeat = new AtomicLong(System.currentTimeMillis());
-        final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         scheduledExecutor.scheduleWithFixedDelay(() -> {
             final long now = System.currentTimeMillis();
             final long then = lastHeartbeat.getAndSet(now);
-            LOGGER.info("Heartbeat: " + (now - then));
+            LOGGER.info("Heartbeat: " + (now - then) + " @ " + progress.get());
         }, 0, 1, TimeUnit.SECONDS);
 
-        final ExecutorService executor = new CooperativeThreadPoolExecutor(1000, Runtime.getRuntime().availableProcessors() * 2);
-        // final ExecutorService executor = Executors.newFixedThreadPool(1000);
+        final Instant totalStart = Instant.now();
+        final List<OperationResult> result = IntStream.range(0, 10_000)
+                .mapToObj(i -> {
+                    // TODO: Measure outer + inner time
+                    return executor.submit(() -> {
+                        final Instant start = Instant.now();
+                        if (i % 2 == 0) {
+                            fastNetwork();
+                            slowNetwork();
+                        } else {
+                            slowNetwork();
+                            fastNetwork();
+                        }
+                        final double localResult = ThreadLocalRandom.current().nextDouble();
+                        final Duration duration = Duration.between(start, Instant.now());
 
-        final double result = IntStream.range(0, 100_000)
-                .mapToObj(i -> executor.submit(() -> {
-                    try {
-                        final double before = someBusyNetWork();
-                        final double during = slowNetwork();
-                        final double after = someBusyNetWork();
-                        return before + during + after;
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }))
+                        progress.incrementAndGet();
+                        return new OperationResult(i, duration, localResult);
+                    });
+                })
                 .collect(Collectors.toList()).stream()
                 .map(f -> {
                     try {
                         return f.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException(e);
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
                     }
                 })
-                .reduce(Double::sum)
-                .orElseThrow();
+                .collect(Collectors.toList());
+        final Duration totalRuntime = Duration.between(totalStart, Instant.now());
 
-        LOGGER.info("Result: {}", result);
-        executor.shutdown();
-        scheduledExecutor.shutdown();
+        result.forEach(x -> LOGGER.info("Result: {}; {}", x.index, x.duration));
+        LOGGER.info("Total runtime: {}", totalRuntime);
+    }
+
+    private static class OperationResult {
+        final int index;
+        final Duration duration;
+        final double result;
+
+        public OperationResult(int index, Duration duration, double result) {
+            this.index = index;
+            this.duration = duration;
+            this.result = result;
+        }
     }
 
     private double someBusyCpuWork() {
@@ -90,19 +122,19 @@ public class Main implements CommandLineRunner {
         return ThreadLocalRandom.current().nextDouble();
     }
 
-    private double someBusyNetWork() throws InterruptedException {
+    private double someBusyNetWork() {
         final long target = ThreadLocalRandom.current().nextLong(100);
         double sum = 0;
         for (long i = 0; i < target; i++) {
-            sum += someBusyCpuWork();
+//            sum += someBusyCpuWork();
             sum += fastNetwork();
-            sum += someBusyCpuWork();
+//            sum += someBusyCpuWork();
         }
         return sum;
     }
 
     @SuppressWarnings("unchecked")
-    private double fastNetwork() throws InterruptedException {
+    private double fastNetwork() {
         return CooperativeThread.tryYieldFor(() -> {
             final Map<String, Object> data = restTemplate.getForEntity("http://localhost:3000/", Map.class).getBody();
             return (double) data.get("randomDouble");
@@ -110,7 +142,7 @@ public class Main implements CommandLineRunner {
     }
 
     @SuppressWarnings("unchecked")
-    private double slowNetwork() throws InterruptedException {
+    private double slowNetwork() {
         return CooperativeThread.tryYieldFor(() -> {
             final Map<String, Object> data = restTemplate.getForEntity("http://localhost:3000/slow", Map.class).getBody();
             return (double) data.get("randomDouble");
