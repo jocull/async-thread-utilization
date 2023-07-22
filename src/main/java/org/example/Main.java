@@ -16,14 +16,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -36,14 +30,16 @@ public class Main implements CommandLineRunner {
     static RestTemplate restTemplate;
     static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     static ExecutorService executor;
-    static List<String> hosts = List.of(
-            "localhost:3000",
-            "localhost:3001",
-            "localhost:3002",
-            "localhost:3003",
-            "localhost:3004",
-            "localhost:3005");
+    static List<String> hosts = List.of("localhost:3000");
+    //    static List<String> hosts = List.of(
+//            "localhost:3000",
+//            "localhost:3001",
+//            "localhost:3002",
+//            "localhost:3003",
+//            "localhost:3004",
+//            "localhost:3005");
     static Iterator<String> hostIterator = Iterators.cycle(hosts);
+    static final List<Map<String, Object>> objectPool = Collections.synchronizedList(new ArrayList<>(1000));
 
     public static void main(String[] args) {
         try {
@@ -85,6 +81,21 @@ public class Main implements CommandLineRunner {
         restTemplate.setMessageConverters(List.of(
                 new CooperativeGsonHttpMessageConverter()
         ));
+
+        LOGGER.info("Filling the object pool...");
+        IntStream.range(0, 1000)
+                .mapToObj(i -> executor.submit(() -> fastNetwork().data))
+                .collect(Collectors.toList())
+                .stream()
+                .map(f -> {
+                    try {
+                        return f.get();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .forEach(objectPool::add);
+        LOGGER.info("Done");
 
         final AtomicInteger progress = new AtomicInteger();
         final AtomicLong lastHeartbeat = new AtomicLong(System.currentTimeMillis());
