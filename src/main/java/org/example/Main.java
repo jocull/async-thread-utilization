@@ -1,10 +1,12 @@
 package org.example;
 
 import com.google.common.collect.Iterators;
+import com.google.gson.Gson;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.example.executor.CooperativeThread;
+import org.example.executor.CooperativeThreadInterruptedException;
 import org.example.executor.CooperativeThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,16 +32,17 @@ public class Main implements CommandLineRunner {
     static RestTemplate restTemplate;
     static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     static ExecutorService executor;
-    static List<String> hosts = List.of("localhost:3000");
-    //    static List<String> hosts = List.of(
+    static final List<String> hosts = List.of("localhost:3000");
+//    static final List<String> hosts = List.of(
 //            "localhost:3000",
 //            "localhost:3001",
 //            "localhost:3002",
 //            "localhost:3003",
 //            "localhost:3004",
 //            "localhost:3005");
-    static Iterator<String> hostIterator = Iterators.cycle(hosts);
-    static final List<Map<String, Object>> objectPool = Collections.synchronizedList(new ArrayList<>(1000));
+    static final Iterator<String> hostIterator = Iterators.cycle(hosts);
+    static List<String> objectPool;
+    static Iterator<String> objectPoolIterator;
 
     public static void main(String[] args) {
         try {
@@ -83,7 +86,7 @@ public class Main implements CommandLineRunner {
         ));
 
         LOGGER.info("Filling the object pool...");
-        IntStream.range(0, 1000)
+        objectPool = IntStream.range(0, 1000)
                 .mapToObj(i -> executor.submit(() -> fastNetwork().data))
                 .collect(Collectors.toList())
                 .stream()
@@ -94,7 +97,9 @@ public class Main implements CommandLineRunner {
                         throw new RuntimeException(e);
                     }
                 })
-                .forEach(objectPool::add);
+                .map(data -> new Gson().toJson(data))
+                .collect(Collectors.toList());
+        objectPoolIterator = Iterators.cycle(objectPool);
         LOGGER.info("Done");
 
         final AtomicInteger progress = new AtomicInteger();
@@ -112,23 +117,14 @@ public class Main implements CommandLineRunner {
                     return executor.submit(() -> {
                         final Instant innerStart = Instant.now();
 
-                        final NetworkResult one;
-                        final NetworkResult two;
-//                        if (i % 2 == 0) {
-//                            one = fastNetwork();
-//                            two = slowNetwork();
-//                        } else {
-//                            one = slowNetwork();
-//                            two = fastNetwork();
-//                        }
-                        one = fastNetwork();
-                        two = fastNetwork();
+                        final NetworkResult one = mockFastNetwork();
+                        final NetworkResult two = mockFastNetwork();
 
                         final Map<String, Object> merged = new HashMap<>();
                         merged.putAll(one.data);
                         merged.putAll(two.data);
                         final NetworkResult mergedResult = parseNetworkResult(merged);
-                        writeNetwork(mergedResult);
+                        mockWriteNetwork(mergedResult);
 
                         final Duration outerDuration = Duration.between(outerStart, Instant.now());
                         final Duration innerDuration = Duration.between(innerStart, Instant.now());
@@ -220,8 +216,35 @@ public class Main implements CommandLineRunner {
         return runNetwork("http://" + getNextHost() + "/slow");
     }
 
+    @SuppressWarnings("unchecked")
+    private NetworkResult mockFastNetwork() {
+        final String data;
+        synchronized (objectPoolIterator) {
+            data = objectPoolIterator.next();
+        }
+        return parseNetworkResult(new Gson().fromJson(data, Map.class));
+    }
+
+    private NetworkResult mockSlowNetwork() {
+        CooperativeThread.tryYieldFor(() -> {
+            try {
+                Thread.sleep(ThreadLocalRandom.current().nextLong(10L, 50L));
+            } catch (InterruptedException ex) {
+                throw new CooperativeThreadInterruptedException(ex);
+            }
+        });
+        return mockFastNetwork();
+    }
+
     private void writeNetwork(NetworkResult networkResult) {
         CooperativeThread.tryYieldFor(() -> restTemplate.postForEntity("http://" + getNextHost() + "/", networkResult.data, Void.class));
+    }
+
+    private void mockWriteNetwork(NetworkResult networkResult) {
+        final String data = new Gson().toJson(networkResult.data);
+        if (data.length() == 0) {
+            throw new IllegalArgumentException("Data not serialized as expected");
+        }
     }
 
     @SuppressWarnings("unchecked")
