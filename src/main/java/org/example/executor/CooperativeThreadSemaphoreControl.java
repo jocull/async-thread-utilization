@@ -6,7 +6,7 @@ import java.util.concurrent.Semaphore;
 
 class CooperativeThreadSemaphoreControl implements CooperativeThreadControl {
     private final Semaphore semaphore;
-    private final ThreadLocal<MutableInt> threadRetainCounter = new ThreadLocal<>(); // TODO: Should this be a field of the thread itself?
+    private final ThreadLocal<MutableInt> threadRetainCounter = new ThreadLocal<>();
 
     CooperativeThreadSemaphoreControl(int parallelism) {
         this.semaphore = new Semaphore(parallelism, true);
