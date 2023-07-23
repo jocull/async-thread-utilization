@@ -105,13 +105,13 @@ public class Main implements CommandLineRunner {
 
         LOGGER.info("Filling the object pool...");
         objectPool = IntStream.range(0, 1000)
-                .mapToObj(i -> executor.submit(() -> CooperativeThread.tryYieldFor(() -> {
+                .mapToObj(i -> executor.submit(() -> {
                     // Manually set the accept type header to force string version of JSON
                     final HttpHeaders httpHeaders = new HttpHeaders();
                     httpHeaders.set(HttpHeaders.ACCEPT, "text/plain");
                     final RequestEntity<String> request = new RequestEntity<>(httpHeaders, HttpMethod.GET, URI.create("http://" + getNextHost() + "/"));
                     return restTemplate.exchange(request, String.class).getBody();
-                })))
+                }))
                 .collect(Collectors.toList())
                 .stream()
                 .map(f -> {

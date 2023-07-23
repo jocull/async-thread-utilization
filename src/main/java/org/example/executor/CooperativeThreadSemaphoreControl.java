@@ -23,12 +23,14 @@ class CooperativeThreadSemaphoreControl implements CooperativeThreadControl {
 
     @Override
     public void requestTime() {
-        try {
-            semaphore.acquire();
-            getThreadRetainCounter().increment();
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new CooperativeThreadInterruptedException(ex);
+        final int retainedCount = getThreadRetainCounter().incrementAndGet();
+        if (retainedCount == 1) {
+            try {
+                semaphore.acquire();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new CooperativeThreadInterruptedException(ex);
+            }
         }
     }
 
