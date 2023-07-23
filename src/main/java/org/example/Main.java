@@ -63,7 +63,7 @@ public class Main implements CommandLineRunner {
             }
             if (args.length > 0) {
                 if (args[0].equals("cooperative")) {
-                    executor = new CooperativeThreadPoolExecutor(threadCount, Runtime.getRuntime().availableProcessors() * 2);
+                    executor = new CooperativeThreadPoolExecutor(threadCount, Runtime.getRuntime().availableProcessors());
                 } else {
                     executor = Executors.newFixedThreadPool(threadCount);
                 }

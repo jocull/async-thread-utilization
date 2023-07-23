@@ -35,4 +35,6 @@ build/
 .DS_Store
 
 ### Project data ###
+.~lock*
 data-*.csv
+data-*.xlsx
