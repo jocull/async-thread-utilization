@@ -1,6 +1,7 @@
 package org.example;
 
 import org.example.executor.CooperativeThread;
+import org.example.executor.CooperativeThreadException;
 import org.springframework.http.converter.json.GsonHttpMessageConverter;
 
 import java.io.Reader;
@@ -13,8 +14,8 @@ public class CooperativeGsonHttpMessageConverter extends GsonHttpMessageConverte
         return CooperativeThread.tryRequestFor(() -> {
             try {
                 return super.readInternal(resolvedType, reader);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            } catch (Exception ex) {
+                throw new CooperativeThreadException(ex);
             }
         });
     }
@@ -24,8 +25,8 @@ public class CooperativeGsonHttpMessageConverter extends GsonHttpMessageConverte
         CooperativeThread.tryRequestFor(() -> {
             try {
                 super.writeInternal(object, type, writer);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            } catch (Exception ex) {
+                throw new CooperativeThreadException(ex);
             }
         });
     }

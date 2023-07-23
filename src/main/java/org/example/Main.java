@@ -14,13 +14,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.RequestEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -87,12 +94,19 @@ public class Main implements CommandLineRunner {
 
         restTemplate = new RestTemplate(requestFactory);
         restTemplate.setMessageConverters(List.of(
-                new CooperativeGsonHttpMessageConverter()
+                new CooperativeGsonHttpMessageConverter(),
+                new CooperativeStringHttpMessageConverter()
         ));
 
         LOGGER.info("Filling the object pool...");
         objectPool = IntStream.range(0, 1000)
-                .mapToObj(i -> executor.submit(() -> fastNetwork().data))
+                .mapToObj(i -> executor.submit(() -> CooperativeThread.tryYieldFor(() -> {
+                    // Manually set the accept type header to force string version of JSON
+                    final HttpHeaders httpHeaders = new HttpHeaders();
+                    httpHeaders.set(HttpHeaders.ACCEPT, "text/plain");
+                    final RequestEntity<String> request = new RequestEntity<>(httpHeaders, HttpMethod.GET, URI.create("http://" + getNextHost() + "/"));
+                    return restTemplate.exchange(request, String.class).getBody();
+                })))
                 .collect(Collectors.toList())
                 .stream()
                 .map(f -> {
@@ -102,7 +116,6 @@ public class Main implements CommandLineRunner {
                         throw new RuntimeException(e);
                     }
                 })
-                .map(data -> new Gson().toJson(data))
                 .collect(Collectors.toList());
         objectPoolIterator = Iterators.cycle(objectPool);
         LOGGER.info("Done");
