@@ -2,6 +2,8 @@ package org.example;
 
 import com.google.common.collect.Iterators;
 import com.google.gson.Gson;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -20,6 +22,9 @@ import org.springframework.http.RequestEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +46,7 @@ public class Main implements CommandLineRunner {
     static RestTemplate restTemplate;
     static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     static ExecutorService executor;
+    static int threadCount = 1000;
     static final List<String> hosts = List.of("localhost:3000");
     static final Iterator<String> hostIterator = Iterators.cycle(hosts);
     static List<String> objectPool;
@@ -48,7 +54,6 @@ public class Main implements CommandLineRunner {
 
     public static void main(String[] args) {
         try {
-            int threadCount = 1000;
             if (args.length > 1) {
                 try {
                     threadCount = Integer.parseInt(args[1]);
@@ -169,10 +174,38 @@ public class Main implements CommandLineRunner {
                 .forEach(operationStatistics::add);
         final Duration totalRuntime = Duration.between(totalStart, Instant.now());
 
+        // OK to shut these down now - no issues if they shut down a 2nd time.
+        // Quiets heartbeat logging before reporting.
+        executor.shutdown();
+        scheduledExecutor.shutdown();
+
         LOGGER.info("Total runtime: {}", totalRuntime);
         LOGGER.info("{}", operationStatistics.queueToStartStats);
         LOGGER.info("{}", operationStatistics.queueToFinishStats);
         LOGGER.info("{}", operationStatistics.startToFinishStats);
+
+        final String filename = "data-" + executor.getClass().getSimpleName() + "_" + threadCount + "-threads.csv";
+        final List<OperationResult> sortedResults = operationStatistics.results.stream()
+                .sorted(Comparator.comparingInt(r -> r.index))
+                .collect(Collectors.toList());
+
+        LOGGER.info("Outputting results: {}", filename);
+        final CSVFormat format = CSVFormat.Builder.create(CSVFormat.DEFAULT)
+                .setDelimiter(',')
+                .setQuote('"')
+                .setHeader("index", "queueToFinishDuration", "startToFinishDuration")
+                .build();
+        try (Writer writer = new FileWriter(filename);
+             CSVPrinter printer = new CSVPrinter(writer, format)) {
+            for (OperationResult result : sortedResults) {
+                printer.printRecord(
+                        result.index,
+                        result.queueToFinishDuration.toMillis(),
+                        result.startToFinishDuration.toMillis());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static class OperationResult {
