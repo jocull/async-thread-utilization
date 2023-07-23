@@ -23,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -122,8 +123,13 @@ public class Main implements CommandLineRunner {
                     return executor.submit(() -> {
                         final Instant startToFinishStart = Instant.now();
 
-                        final NetworkResult one = mockFastNetwork();
-                        final NetworkResult two = mockFastNetwork();
+                        final List<Supplier<NetworkResult>> getters = new ArrayList<>(2);
+                        getters.add(this::mockFastNetwork);
+                        getters.add(this::mockSlowNetwork);
+                        Collections.shuffle(getters);
+
+                        final NetworkResult one = getters.get(0).get();
+                        final NetworkResult two = getters.get(1).get();
 
                         final Map<String, Object> merged = new HashMap<>();
                         merged.putAll(one.data);
@@ -255,7 +261,7 @@ public class Main implements CommandLineRunner {
     private NetworkResult mockSlowNetwork() {
         CooperativeThread.tryYieldFor(() -> {
             try {
-                Thread.sleep(ThreadLocalRandom.current().nextLong(10L, 50L));
+                Thread.sleep(50L);
             } catch (InterruptedException ex) {
                 throw new CooperativeThreadInterruptedException(ex);
             }
