@@ -2,6 +2,7 @@ package org.example;
 
 import com.google.common.collect.Iterators;
 import com.google.gson.Gson;
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
@@ -111,11 +112,12 @@ public class Main implements CommandLineRunner {
         }, 0, 1, TimeUnit.SECONDS);
 
         final Instant totalStart = Instant.now();
-        final List<OperationResult> result = IntStream.range(0, 10_000)
+        final OperationStatistics operationStatistics = new OperationStatistics();
+        IntStream.range(0, 10_000)
                 .mapToObj(i -> {
-                    final Instant outerStart = Instant.now();
+                    final Instant queueToFinishStart = Instant.now();
                     return executor.submit(() -> {
-                        final Instant innerStart = Instant.now();
+                        final Instant startToFinishStart = Instant.now();
 
                         final NetworkResult one = mockFastNetwork();
                         final NetworkResult two = mockFastNetwork();
@@ -126,12 +128,12 @@ public class Main implements CommandLineRunner {
                         final NetworkResult mergedResult = parseNetworkResult(merged);
                         mockWriteNetwork(mergedResult);
 
-                        final Duration outerDuration = Duration.between(outerStart, Instant.now());
-                        final Duration innerDuration = Duration.between(innerStart, Instant.now());
-                        final Duration waitDuration = Duration.between(outerStart, innerStart);
+                        final Duration queueToFinishDuration = Duration.between(queueToFinishStart, Instant.now());
+                        final Duration startToFinishDuration = Duration.between(startToFinishStart, Instant.now());
+                        final Duration queueToStartDuration = Duration.between(queueToFinishStart, startToFinishStart);
 
                         progress.incrementAndGet();
-                        return new OperationResult(i, outerDuration, innerDuration, waitDuration);
+                        return new OperationResult(i, queueToFinishDuration, startToFinishDuration, queueToStartDuration);
                     });
                 })
                 .collect(Collectors.toList()).stream()
@@ -142,34 +144,73 @@ public class Main implements CommandLineRunner {
                         throw new RuntimeException(ex);
                     }
                 })
-                .collect(Collectors.toList());
+                .forEach(operationStatistics::add);
         final Duration totalRuntime = Duration.between(totalStart, Instant.now());
 
-        result.forEach(x -> LOGGER.info("Result: {}", x));
         LOGGER.info("Total runtime: {}", totalRuntime);
+        LOGGER.info("{}", operationStatistics.queueToStartStats);
+        LOGGER.info("{}", operationStatistics.queueToFinishStats);
+        LOGGER.info("{}", operationStatistics.startToFinishStats);
     }
 
     private static class OperationResult {
         final int index;
-        final Duration outerDuration;
-        final Duration innerDuration;
-        final Duration waitDuration;
+        final Duration queueToFinishDuration;
+        final Duration startToFinishDuration;
+        final Duration queueToStartDuration;
 
-        public OperationResult(int index, Duration outerDuration, Duration innerDuration, Duration waitDuration) {
+        public OperationResult(int index, Duration queueToFinishDuration, Duration startToFinishDuration, Duration queueToStartDuration) {
             this.index = index;
-            this.outerDuration = outerDuration;
-            this.innerDuration = innerDuration;
-            this.waitDuration = waitDuration;
+            this.queueToFinishDuration = queueToFinishDuration;
+            this.startToFinishDuration = startToFinishDuration;
+            this.queueToStartDuration = queueToStartDuration;
         }
 
         @Override
         public String toString() {
             return "OperationResult{" +
                     "index=" + index +
-                    ", outerDuration=" + outerDuration +
-                    ", innerDuration=" + innerDuration +
-                    ", waitDuration=" + waitDuration +
+                    ", queueToFinishDuration=" + queueToFinishDuration +
+                    ", startToFinishDuration=" + startToFinishDuration +
+                    ", queueToStartDuration=" + queueToStartDuration +
                     '}';
+        }
+    }
+
+    private static class OperationStatistics {
+        final List<OperationResult> results = new ArrayList<>();
+        final StatsContainer queueToStartStats = new StatsContainer("Queue-to-start durations");
+        final StatsContainer queueToFinishStats = new StatsContainer("Queue-to-finish durations");
+        final StatsContainer startToFinishStats = new StatsContainer("Start-to-finish durations");
+
+        static class StatsContainer {
+            final String label;
+            final DescriptiveStatistics ref;
+
+            StatsContainer(String label) {
+                this.label = label;
+                this.ref = new DescriptiveStatistics();
+            }
+
+            public void addValue(double v) {
+                ref.addValue(v);
+            }
+
+            @Override
+            public String toString() {
+                return label + " (millis): " +
+                        "mean=" + Math.round(ref.getMean()) + ", " +
+                        "min=" + Math.round(ref.getMin()) + ", " +
+                        "max=" + Math.round(ref.getMax()) + ", " +
+                        "stddev=" + ref.getStandardDeviation();
+            }
+        }
+
+        void add(OperationResult r) {
+            results.add(r);
+            queueToStartStats.addValue(r.queueToStartDuration.toMillis());
+            queueToFinishStats.addValue(r.queueToFinishDuration.toMillis());
+            startToFinishStats.addValue(r.startToFinishDuration.toMillis());
         }
     }
 
