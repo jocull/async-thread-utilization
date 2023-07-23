@@ -47,12 +47,22 @@ public class Main implements CommandLineRunner {
 
     public static void main(String[] args) {
         try {
-            if (args.length > 0 && args[0].equals("cooperative")) {
-                executor = new CooperativeThreadPoolExecutor(1000, Runtime.getRuntime().availableProcessors() * 2);
-            } else {
-                executor = Executors.newFixedThreadPool(1000);
+            int threadCount = 1000;
+            if (args.length > 1) {
+                try {
+                    threadCount = Integer.parseInt(args[1]);
+                } catch (Exception ex) {
+                    LOGGER.error("Can't parse thread count", ex);
+                }
             }
-            LOGGER.info("Running with executor type: {}", executor.getClass().getName());
+            if (args.length > 0) {
+                if (args[0].equals("cooperative")) {
+                    executor = new CooperativeThreadPoolExecutor(threadCount, Runtime.getRuntime().availableProcessors() * 2);
+                } else {
+                    executor = Executors.newFixedThreadPool(threadCount);
+                }
+            }
+            LOGGER.info("Running with executor type: {}, threads: {}", executor.getClass().getName(), threadCount);
 
             LOGGER.info("STARTING THE APPLICATION");
             SpringApplication.run(Main.class, args);
