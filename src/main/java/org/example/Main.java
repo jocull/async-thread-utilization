@@ -34,13 +34,6 @@ public class Main implements CommandLineRunner {
     static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     static ExecutorService executor;
     static final List<String> hosts = List.of("localhost:3000");
-//    static final List<String> hosts = List.of(
-//            "localhost:3000",
-//            "localhost:3001",
-//            "localhost:3002",
-//            "localhost:3003",
-//            "localhost:3004",
-//            "localhost:3005");
     static final Iterator<String> hostIterator = Iterators.cycle(hosts);
     static List<String> objectPool;
     static Iterator<String> objectPoolIterator;
@@ -233,23 +226,6 @@ public class Main implements CommandLineRunner {
             this.parseResult = parseResult;
         }
     }
-
-//    private double someBusyCpuWork() {
-//        final long target = ThreadLocalRandom.current().nextLong(50_000_000L);
-//        for (long i = 0; i < target; i++) {
-//            // so busy
-//        }
-//        return ThreadLocalRandom.current().nextDouble();
-//    }
-//
-//    private double manyFastNetwork() {
-//        final long target = ThreadLocalRandom.current().nextLong(100);
-//        double sum = 0;
-//        for (long i = 0; i < target; i++) {
-//            sum += fastNetwork();
-//        }
-//        return sum;
-//    }
 
     private String getNextHost() {
         synchronized (hostIterator) {
