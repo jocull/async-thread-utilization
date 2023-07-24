@@ -1,11 +1,11 @@
 package org.example.executor;
 
 public interface CooperativeThreadControl {
-    void requestTime();
+    void requestTime(CooperativeThread ct);
 
-    void releaseTime();
+    void releaseTime(CooperativeThread ct);
 
     static CooperativeThreadControl create(int parallelism) {
-        return new CooperativeThreadSemaphoreControl(parallelism);
+        return new CooperativeThreadOrderedControl(parallelism);
     }
 }

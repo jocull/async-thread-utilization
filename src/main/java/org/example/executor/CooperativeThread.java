@@ -4,36 +4,56 @@ import java.util.function.Supplier;
 
 public class CooperativeThread extends Thread {
     private final CooperativeThreadControl control;
+    private volatile long rootTaskTime;
 
-    public CooperativeThread(Runnable target, String name, CooperativeThreadControl control) {
+    /* package-private */
+    CooperativeThread(Runnable target, String name, CooperativeThreadControl control) {
         super(target, name);
         this.control = control;
     }
 
-    /* package-private */
-    static CooperativeThreadControl getCooperativeThreadControlOrNull() {
-        return getCooperativeThreadControlOrNull(Thread.currentThread());
+    public CooperativeThreadControl getControl() {
+        return control;
+    }
+
+    public long getRootTaskTime() {
+        return rootTaskTime;
     }
 
     /* package-private */
-    static CooperativeThreadControl getCooperativeThreadControlOrNull(Thread thread) {
+    void setRootTaskTime(long rootTaskTime) {
+        this.rootTaskTime = rootTaskTime;
+    }
+
+    /* package-private */
+    void clearRootTaskTime() {
+        this.rootTaskTime = Long.MIN_VALUE;
+    }
+
+    /* package-private */
+    static CooperativeThread getCooperativeThreadOrNull() {
+        return getCooperativeThreadOrNull(Thread.currentThread());
+    }
+
+    /* package-private */
+    static CooperativeThread getCooperativeThreadOrNull(Thread thread) {
         if (thread instanceof CooperativeThread) {
-            return ((CooperativeThread) thread).control;
+            return (CooperativeThread) thread;
         }
         return null;
     }
 
     /* package-private */
-    static CooperativeThreadControl getCooperativeThreadControlOrThrow() {
-        return getCooperativeThreadControlOrThrow(Thread.currentThread());
+    static CooperativeThread getCooperativeThreadOrThrow() {
+        return getCooperativeThreadOrThrow(Thread.currentThread());
     }
 
     /* package-private */
-    static CooperativeThreadControl getCooperativeThreadControlOrThrow(Thread thread) {
+    static CooperativeThread getCooperativeThreadOrThrow(Thread thread) {
         if (thread instanceof CooperativeThread) {
-            return ((CooperativeThread) thread).control;
+            return (CooperativeThread) thread;
         }
-        throw new IllegalStateException("CooperativeThreadControl not found in "
+        throw new IllegalStateException("CooperativeThread not found in "
                 + thread.getClass().getName()
                 + " \"" + thread.getName() + "\"");
     }
@@ -46,16 +66,16 @@ public class CooperativeThread extends Thread {
     }
 
     public static <T> T tryYieldFor(Supplier<T> supplier) {
-        final CooperativeThreadControl control = getCooperativeThreadControlOrNull();
-        if (control == null) {
+        final CooperativeThread ct = getCooperativeThreadOrNull();
+        if (ct == null) {
             return supplier.get();
         }
 
-        control.releaseTime();
+        ct.getControl().releaseTime(ct);
         try {
             return supplier.get();
         } finally {
-            control.requestTime();
+            ct.getControl().requestTime(ct);
         }
     }
 
@@ -69,16 +89,16 @@ public class CooperativeThread extends Thread {
 
     // Inverse!
     public static <T> T tryRequestFor(Supplier<T> supplier) {
-        final CooperativeThreadControl control = getCooperativeThreadControlOrNull();
-        if (control == null) {
+        final CooperativeThread ct = getCooperativeThreadOrNull();
+        if (ct == null) {
             return supplier.get();
         }
 
-        control.requestTime();
+        ct.control.requestTime(ct);
         try {
             return supplier.get();
         } finally {
-            control.releaseTime();
+            ct.control.releaseTime(ct);
         }
     }
 }

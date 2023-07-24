@@ -15,13 +15,17 @@ public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
 
     @Override
     protected void beforeExecute(Thread t, Runnable r) {
-        CooperativeThread.getCooperativeThreadControlOrThrow(t).requestTime();
-        super.beforeExecute(t, r);
+        final CooperativeThread ct = (CooperativeThread) t;
+        ct.setRootTaskTime(System.currentTimeMillis());
+        ct.getControl().requestTime(ct);
+        super.beforeExecute(ct, r);
     }
 
     @Override
     protected void afterExecute(Runnable r, Throwable t) {
-        CooperativeThread.getCooperativeThreadControlOrThrow().releaseTime();
+        final CooperativeThread ct = (CooperativeThread) Thread.currentThread();
+        ct.clearRootTaskTime();
+        ct.getControl().releaseTime(ct);
         super.afterExecute(r, t);
     }
 }

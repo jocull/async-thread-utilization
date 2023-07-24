@@ -22,7 +22,7 @@ class CooperativeThreadSemaphoreControl implements CooperativeThreadControl {
     }
 
     @Override
-    public void requestTime() {
+    public void requestTime(CooperativeThread ct) {
         final int retainedCount = getThreadRetainCounter().incrementAndGet();
         if (retainedCount == 1) {
             try {
@@ -35,7 +35,7 @@ class CooperativeThreadSemaphoreControl implements CooperativeThreadControl {
     }
 
     @Override
-    public void releaseTime() {
+    public void releaseTime(CooperativeThread ct) {
         final int retainedCount = getThreadRetainCounter().decrementAndGet();
         if (retainedCount == 0) {
             semaphore.release();
