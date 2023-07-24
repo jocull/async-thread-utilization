@@ -1,8 +1,6 @@
 package org.example.executor;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
     public CooperativeThreadPoolExecutor(int poolSize, int parallelism) {
@@ -14,9 +12,19 @@ public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
     }
 
     @Override
+    protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
+        return new RootTimedFutureTask<>(runnable, value);
+    }
+
+    @Override
+    protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
+        return new RootTimedFutureTask<>(callable);
+    }
+
+    @Override
     protected void beforeExecute(Thread t, Runnable r) {
         final CooperativeThread ct = (CooperativeThread) t;
-        ct.setRootTaskTime(System.currentTimeMillis());
+        ct.setRootTaskTime(((RootTimedFutureTask<?>) r).createTime);
         ct.getControl().requestTime(ct);
         super.beforeExecute(ct, r);
     }
@@ -27,5 +35,19 @@ public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
         ct.clearRootTaskTime();
         ct.getControl().releaseTime(ct);
         super.afterExecute(r, t);
+    }
+
+    private static class RootTimedFutureTask<T> extends FutureTask<T> {
+        final long createTime; // TODO: Move all task ID logic to here?
+
+        public RootTimedFutureTask(Callable<T> callable) {
+            super(callable);
+            this.createTime = System.currentTimeMillis();
+        }
+
+        public RootTimedFutureTask(Runnable runnable, T result) {
+            super(runnable, result);
+            this.createTime = System.currentTimeMillis();
+        }
     }
 }
