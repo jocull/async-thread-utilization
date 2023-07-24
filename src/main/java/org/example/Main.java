@@ -50,7 +50,7 @@ public class Main implements CommandLineRunner {
     static final List<String> hosts = List.of("localhost:3000");
     static final Iterator<String> hostIterator = Iterators.cycle(hosts);
     static List<String> objectPool;
-    static Iterator<String> objectPoolIterator;
+    static ThreadLocal<Iterator<String>> objectPoolIterator = new ThreadLocal<>();
 
     public static void main(String[] args) {
         try {
@@ -127,7 +127,6 @@ public class Main implements CommandLineRunner {
         objectPool = List.of(
                 objectPool.stream().max(Comparator.comparingInt(String::length)).orElseThrow()
         );
-        objectPoolIterator = Iterators.cycle(objectPool);
         LOGGER.info("Done - using item of length {}", objectPool.get(0).length());
 
         final AtomicInteger progress = new AtomicInteger();
@@ -300,12 +299,18 @@ public class Main implements CommandLineRunner {
         return runNetwork("http://" + getNextHost() + "/slow");
     }
 
+    private String nextObject() {
+        Iterator<String> cycle = objectPoolIterator.get();
+        if (cycle == null) {
+            cycle = Iterators.cycle(objectPool);
+            objectPoolIterator.set(cycle);
+        }
+        return cycle.next();
+    }
+
     @SuppressWarnings("unchecked")
     private NetworkResult mockFastNetwork() {
-        final String data;
-        synchronized (objectPoolIterator) {
-            data = objectPoolIterator.next();
-        }
+        final String data = nextObject();
         return parseNetworkResult(new Gson().fromJson(data, Map.class));
     }
 
