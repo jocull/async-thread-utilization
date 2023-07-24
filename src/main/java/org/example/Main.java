@@ -122,8 +122,13 @@ public class Main implements CommandLineRunner {
                     }
                 })
                 .collect(Collectors.toList());
+
+        // Drop all but the largest so runs can be better compared
+        objectPool = List.of(
+                objectPool.stream().max(Comparator.comparingInt(String::length)).orElseThrow()
+        );
         objectPoolIterator = Iterators.cycle(objectPool);
-        LOGGER.info("Done");
+        LOGGER.info("Done - using item of length {}", objectPool.get(0).length());
 
         final AtomicInteger progress = new AtomicInteger();
         final AtomicLong lastHeartbeat = new AtomicLong(System.currentTimeMillis());
