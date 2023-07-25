@@ -38,3 +38,4 @@ build/
 .~lock*
 data-*.csv
 data-*.xlsx
+*.jfr

@@ -29,10 +29,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -145,17 +142,10 @@ public class Main implements CommandLineRunner {
                     return executor.submit(() -> {
                         final Instant startToFinishStart = Instant.now();
 
-                        final List<Supplier<NetworkResult>> getters = new ArrayList<>(2);
-                        getters.add(this::mockFastNetwork);
-                        getters.add(this::mockSlowNetwork);
-                        Collections.shuffle(getters);
-
-                        final NetworkResult one = getters.get(0).get();
-                        final NetworkResult two = getters.get(1).get();
-
+                        final List<NetworkResult> networkResults = mockJitteryNetwork();
                         final Map<String, Object> merged = new HashMap<>();
-                        merged.putAll(one.data);
-                        merged.putAll(two.data);
+                        networkResults.forEach(nr -> merged.putAll(nr.data));
+
                         final NetworkResult mergedResult = parseNetworkResult(merged);
                         mockWriteNetwork(mergedResult);
 
@@ -323,6 +313,21 @@ public class Main implements CommandLineRunner {
             }
         });
         return mockFastNetwork();
+    }
+
+    private List<NetworkResult> mockJitteryNetwork() {
+        return IntStream.range(0, 10)
+                .mapToObj(i -> {
+                    CooperativeThread.tryYieldFor(() -> {
+                        try {
+                            Thread.sleep(ThreadLocalRandom.current().nextLong(10, 20));
+                        } catch (InterruptedException ex) {
+                            throw new CooperativeThreadInterruptedException(ex);
+                        }
+                    });
+                    return mockFastNetwork();
+                })
+                .collect(Collectors.toList());
     }
 
     private void writeNetwork(NetworkResult networkResult) {
