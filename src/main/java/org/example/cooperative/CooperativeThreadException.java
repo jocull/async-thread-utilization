@@ -1,4 +1,4 @@
-package org.example.executor;
+package org.example.cooperative;
 
 public class CooperativeThreadException extends RuntimeException {
     public CooperativeThreadException(Throwable cause) {

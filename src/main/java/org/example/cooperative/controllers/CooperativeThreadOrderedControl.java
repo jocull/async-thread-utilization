@@ -1,6 +1,8 @@
-package org.example.executor;
+package org.example.cooperative.controllers;
 
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.example.cooperative.CooperativeThread;
+import org.example.cooperative.CooperativeThreadInterruptedException;
 
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -8,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+/* package-private */
 class CooperativeThreadOrderedControl implements CooperativeThreadControl {
     private static final AtomicLong WAIT_ID = new AtomicLong();
 

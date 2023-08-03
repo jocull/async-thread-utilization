@@ -1,7 +1,7 @@
 package org.example;
 
-import org.example.executor.CooperativeThread;
-import org.example.executor.CooperativeThreadException;
+import org.example.cooperative.CooperativeThread;
+import org.example.cooperative.CooperativeThreadException;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.converter.StringHttpMessageConverter;

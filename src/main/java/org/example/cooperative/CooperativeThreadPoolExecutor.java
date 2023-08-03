@@ -1,4 +1,6 @@
-package org.example.executor;
+package org.example.cooperative;
+
+import org.example.cooperative.controllers.CooperativeThreadControl;
 
 import java.util.concurrent.*;
 
@@ -38,7 +40,9 @@ public class CooperativeThreadPoolExecutor extends ThreadPoolExecutor {
     }
 
     private static class RootTimedFutureTask<T> extends FutureTask<T> {
-        final long createTime; // TODO: Move all task ID logic to here?
+        // TODO: Move all task ID logic to here?
+        // TODO: Replaces root task time somehow?
+        final long createTime;
 
         public RootTimedFutureTask(Callable<T> callable) {
             super(callable);

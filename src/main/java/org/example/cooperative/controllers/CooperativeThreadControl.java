@@ -1,4 +1,6 @@
-package org.example.executor;
+package org.example.cooperative.controllers;
+
+import org.example.cooperative.CooperativeThread;
 
 public interface CooperativeThreadControl {
     void requestTime(CooperativeThread ct);

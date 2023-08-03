@@ -1,4 +1,4 @@
-package org.example.executor;
+package org.example.cooperative;
 
 public class CooperativeThreadInterruptedException extends CooperativeThreadException {
     public CooperativeThreadInterruptedException(Throwable cause) {

@@ -1,8 +1,11 @@
-package org.example.executor;
+package org.example.cooperative;
+
+import org.example.cooperative.controllers.CooperativeThreadControl;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Deprecated
 class CooperativeThreadFactory implements ThreadFactory {
     private final static AtomicInteger POOL_COUNTER = new AtomicInteger();
 

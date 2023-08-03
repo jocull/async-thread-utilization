@@ -1,9 +1,13 @@
-package org.example.executor;
+package org.example.cooperative.controllers;
 
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.example.cooperative.CooperativeThread;
+import org.example.cooperative.CooperativeThreadInterruptedException;
 
 import java.util.concurrent.Semaphore;
 
+/* package-private */
+@Deprecated // TODO: Was only useful as proof-of-concept
 class CooperativeThreadSemaphoreControl implements CooperativeThreadControl {
     private final Semaphore semaphore;
     private final ThreadLocal<MutableInt> threadRetainCounter = new ThreadLocal<>();

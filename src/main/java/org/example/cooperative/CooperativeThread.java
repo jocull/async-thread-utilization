@@ -1,7 +1,10 @@
-package org.example.executor;
+package org.example.cooperative;
+
+import org.example.cooperative.controllers.CooperativeThreadControl;
 
 import java.util.function.Supplier;
 
+@Deprecated // TODO: Can this be replaced entirely with ThreadLocals?
 public class CooperativeThread extends Thread {
     private final CooperativeThreadControl control;
     private volatile long rootTaskTime;
