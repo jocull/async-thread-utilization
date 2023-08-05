@@ -10,4 +10,8 @@ public interface CooperativeThreadControl {
     static CooperativeThreadControl create(int parallelism) {
         return new CooperativeThreadOrderedControl(parallelism);
     }
+
+    static CooperativeThreadControl createNoOp() {
+        return new CooperativeThreadNoOpControl();
+    }
 }
