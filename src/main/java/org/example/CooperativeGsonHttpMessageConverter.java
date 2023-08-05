@@ -1,7 +1,7 @@
 package org.example;
 
-import org.example.cooperative.CooperativeThread;
 import org.example.cooperative.CooperativeThreadException;
+import org.example.cooperative.controllers.CooperativeThreadControl;
 import org.springframework.http.converter.json.GsonHttpMessageConverter;
 
 import java.io.Reader;
@@ -9,9 +9,15 @@ import java.io.Writer;
 import java.lang.reflect.Type;
 
 public class CooperativeGsonHttpMessageConverter extends GsonHttpMessageConverter {
+    private final CooperativeThreadControl control;
+
+    public CooperativeGsonHttpMessageConverter(CooperativeThreadControl control) {
+        this.control = control;
+    }
+
     @Override
     protected Object readInternal(Type resolvedType, Reader reader) throws Exception {
-        return CooperativeThread.tryRequestFor(() -> {
+        return control.tryRequestFor(() -> {
             try {
                 return super.readInternal(resolvedType, reader);
             } catch (Exception ex) {
@@ -22,7 +28,7 @@ public class CooperativeGsonHttpMessageConverter extends GsonHttpMessageConverte
 
     @Override
     protected void writeInternal(Object object, Type type, Writer writer) throws Exception {
-        CooperativeThread.tryRequestFor(() -> {
+        control.tryRequestFor(() -> {
             try {
                 super.writeInternal(object, type, writer);
             } catch (Exception ex) {

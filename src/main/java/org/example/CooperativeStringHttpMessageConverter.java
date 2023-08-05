@@ -1,7 +1,7 @@
 package org.example;
 
-import org.example.cooperative.CooperativeThread;
 import org.example.cooperative.CooperativeThreadException;
+import org.example.cooperative.controllers.CooperativeThreadControl;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.converter.StringHttpMessageConverter;
@@ -9,9 +9,15 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import java.io.IOException;
 
 public class CooperativeStringHttpMessageConverter extends StringHttpMessageConverter {
+    private final CooperativeThreadControl control;
+
+    public CooperativeStringHttpMessageConverter(CooperativeThreadControl control) {
+        this.control = control;
+    }
+
     @Override
     protected String readInternal(Class<? extends String> clazz, HttpInputMessage inputMessage) throws IOException {
-        return CooperativeThread.tryRequestFor(() -> {
+        return control.tryRequestFor(() -> {
             try {
                 return super.readInternal(clazz, inputMessage);
             } catch (Exception ex) {
@@ -22,7 +28,7 @@ public class CooperativeStringHttpMessageConverter extends StringHttpMessageConv
 
     @Override
     protected void writeInternal(String str, HttpOutputMessage outputMessage) throws IOException {
-        CooperativeThread.tryRequestFor(() -> {
+        control.tryRequestFor(() -> {
             try {
                 super.writeInternal(str, outputMessage);
             } catch (Exception ex) {

@@ -1,7 +1,6 @@
 package org.example.cooperative.controllers;
 
 import org.apache.commons.lang3.mutable.MutableInt;
-import org.example.cooperative.CooperativeThread;
 import org.example.cooperative.CooperativeThreadInterruptedException;
 
 import java.util.SortedSet;
@@ -35,7 +34,21 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
     }
 
     @Override
-    public void requestTime(CooperativeThread ct) {
+    public void startNewTask() {
+        final ThreadState threadState = getThreadState();
+        threadState.rootTaskTime = System.currentTimeMillis();
+        requestTime();
+    }
+
+    @Override
+    public void endCurrentTask() {
+        final ThreadState threadState = getThreadState();
+        releaseTime();
+        threadState.rootTaskTime = 0L;
+    }
+
+    @Override
+    public void requestTime() {
         final ThreadState threadState = getThreadState();
         final int retainedCount = threadState.retainCounter.incrementAndGet();
         if (retainedCount == 1) {
@@ -45,7 +58,7 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
                 // This loops helps guard against wake-ups where we aren't actually ready to start
                 while (currentParallelism.intValue() >= targetParallelism) {
                     // Wait to be notified when space is free
-                    final CooperativeThreadWaiter w = new CooperativeThreadWaiter(WAIT_ID.getAndIncrement(), ct.getRootTaskTime(), threadState.condition);
+                    final CooperativeThreadWaiter w = new CooperativeThreadWaiter(WAIT_ID.getAndIncrement(), threadState.rootTaskTime, threadState.condition);
                     if (!waiters.add(w)) {
                         // This should never happen - if it does it's an implementation problem
                         throw new IllegalStateException("Failed to add waiter " + w.waitId);
@@ -63,7 +76,7 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
     }
 
     @Override
-    public void releaseTime(CooperativeThread ct) {
+    public void releaseTime() {
         final int retainedCount = getThreadState().retainCounter.decrementAndGet();
         if (retainedCount == 0) {
             lock.lock();
@@ -112,10 +125,12 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
     }
 
     private class ThreadState {
+        long rootTaskTime;
         final MutableInt retainCounter;
         final Condition condition;
 
         public ThreadState() {
+            this.rootTaskTime = 0L;
             this.retainCounter = new MutableInt(0);
             this.condition = lock.newCondition();
         }

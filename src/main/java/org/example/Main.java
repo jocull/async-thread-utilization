@@ -8,9 +8,8 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.example.cooperative.CooperativeThread;
 import org.example.cooperative.CooperativeThreadInterruptedException;
-import org.example.cooperative.CooperativeThreadPoolExecutor;
+import org.example.cooperative.controllers.CooperativeThreadControl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -43,6 +42,7 @@ public class Main implements CommandLineRunner {
     static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     static ExecutorService executor;
     static int threadCount = 1000;
+    static CooperativeThreadControl control;
     static final List<String> hosts = List.of("localhost:3000");
     static final Iterator<String> hostIterator = Iterators.cycle(hosts);
     static List<String> objectPool;
@@ -57,11 +57,13 @@ public class Main implements CommandLineRunner {
                     LOGGER.error("Can't parse thread count", ex);
                 }
             }
+
+            executor = Executors.newFixedThreadPool(threadCount);
             if (args.length > 0) {
                 if (args[0].equals("cooperative")) {
-                    executor = new CooperativeThreadPoolExecutor(threadCount, Runtime.getRuntime().availableProcessors());
+                    control = CooperativeThreadControl.create(Runtime.getRuntime().availableProcessors());
                 } else {
-                    executor = Executors.newFixedThreadPool(threadCount);
+                    control = CooperativeThreadControl.none();
                 }
             }
             LOGGER.info("Running with executor type: {}, threads: {}", executor.getClass().getName(), threadCount);
@@ -95,8 +97,8 @@ public class Main implements CommandLineRunner {
 
         restTemplate = new RestTemplate(requestFactory);
         restTemplate.setMessageConverters(List.of(
-                new CooperativeGsonHttpMessageConverter(),
-                new CooperativeStringHttpMessageConverter()
+                new CooperativeGsonHttpMessageConverter(control),
+                new CooperativeStringHttpMessageConverter(control)
         ));
 
         LOGGER.info("Filling the object pool...");
@@ -139,21 +141,26 @@ public class Main implements CommandLineRunner {
                 .mapToObj(i -> {
                     final Instant queueToFinishStart = Instant.now();
                     return executor.submit(() -> {
-                        final Instant startToFinishStart = Instant.now();
+                        control.startNewTask();
+                        try {
+                            final Instant startToFinishStart = Instant.now();
 
-                        final List<NetworkResult> networkResults = mockJitteryNetwork();
-                        final Map<String, Object> merged = new HashMap<>();
-                        networkResults.forEach(nr -> merged.putAll(nr.data));
+                            final List<NetworkResult> networkResults = mockJitteryNetwork();
+                            final Map<String, Object> merged = new HashMap<>();
+                            networkResults.forEach(nr -> merged.putAll(nr.data));
 
-                        final NetworkResult mergedResult = parseNetworkResult(merged);
-                        mockWriteNetwork(mergedResult);
+                            final NetworkResult mergedResult = parseNetworkResult(merged);
+                            mockWriteNetwork(mergedResult);
 
-                        final Duration queueToFinishDuration = Duration.between(queueToFinishStart, Instant.now());
-                        final Duration startToFinishDuration = Duration.between(startToFinishStart, Instant.now());
-                        final Duration queueToStartDuration = Duration.between(queueToFinishStart, startToFinishStart);
+                            final Duration queueToFinishDuration = Duration.between(queueToFinishStart, Instant.now());
+                            final Duration startToFinishDuration = Duration.between(startToFinishStart, Instant.now());
+                            final Duration queueToStartDuration = Duration.between(queueToFinishStart, startToFinishStart);
 
-                        progress.incrementAndGet();
-                        return new OperationResult(i, queueToFinishDuration, startToFinishDuration, queueToStartDuration);
+                            progress.incrementAndGet();
+                            return new OperationResult(i, queueToFinishDuration, startToFinishDuration, queueToStartDuration);
+                        } finally {
+                            control.endCurrentTask();
+                        }
                     });
                 })
                 .collect(Collectors.toList()).stream()
@@ -304,7 +311,7 @@ public class Main implements CommandLineRunner {
     }
 
     private NetworkResult mockSlowNetwork() {
-        CooperativeThread.tryYieldFor(() -> {
+        control.tryYieldFor(() -> {
             try {
                 Thread.sleep(50L);
             } catch (InterruptedException ex) {
@@ -317,7 +324,7 @@ public class Main implements CommandLineRunner {
     private List<NetworkResult> mockJitteryNetwork() {
         return IntStream.range(0, 10)
                 .mapToObj(i -> {
-                    CooperativeThread.tryYieldFor(() -> {
+                    control.tryYieldFor(() -> {
                         try {
                             Thread.sleep(ThreadLocalRandom.current().nextLong(10, 20));
                         } catch (InterruptedException ex) {
@@ -330,7 +337,7 @@ public class Main implements CommandLineRunner {
     }
 
     private void writeNetwork(NetworkResult networkResult) {
-        CooperativeThread.tryYieldFor(() -> restTemplate.postForEntity("http://" + getNextHost() + "/", networkResult.data, Void.class));
+        control.tryYieldFor(() -> restTemplate.postForEntity("http://" + getNextHost() + "/", networkResult.data, Void.class));
     }
 
     private void mockWriteNetwork(NetworkResult networkResult) {
@@ -342,7 +349,7 @@ public class Main implements CommandLineRunner {
 
     @SuppressWarnings("unchecked")
     private NetworkResult runNetwork(String url) {
-        final Map<String, Object> data = CooperativeThread.tryYieldFor(() -> restTemplate.getForEntity(url, Map.class).getBody());
+        final Map<String, Object> data = control.tryYieldFor(() -> restTemplate.getForEntity(url, Map.class).getBody());
         return parseNetworkResult(data);
     }
 
