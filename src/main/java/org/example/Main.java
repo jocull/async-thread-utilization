@@ -140,28 +140,23 @@ public class Main implements CommandLineRunner {
         IntStream.range(0, 10_000)
                 .mapToObj(i -> {
                     final Instant queueToFinishStart = Instant.now();
-                    return executor.submit(() -> {
-                        control.startNewTask();
-                        try {
-                            final Instant startToFinishStart = Instant.now();
+                    return executor.submit(() -> control.tryRequestFor(() -> {
+                        final Instant startToFinishStart = Instant.now();
 
-                            final List<NetworkResult> networkResults = mockJitteryNetwork();
-                            final Map<String, Object> merged = new HashMap<>();
-                            networkResults.forEach(nr -> merged.putAll(nr.data));
+                        final List<NetworkResult> networkResults = mockJitteryNetwork();
+                        final Map<String, Object> merged = new HashMap<>();
+                        networkResults.forEach(nr -> merged.putAll(nr.data));
 
-                            final NetworkResult mergedResult = parseNetworkResult(merged);
-                            mockWriteNetwork(mergedResult);
+                        final NetworkResult mergedResult = parseNetworkResult(merged);
+                        mockWriteNetwork(mergedResult);
 
-                            final Duration queueToFinishDuration = Duration.between(queueToFinishStart, Instant.now());
-                            final Duration startToFinishDuration = Duration.between(startToFinishStart, Instant.now());
-                            final Duration queueToStartDuration = Duration.between(queueToFinishStart, startToFinishStart);
+                        final Duration queueToFinishDuration = Duration.between(queueToFinishStart, Instant.now());
+                        final Duration startToFinishDuration = Duration.between(startToFinishStart, Instant.now());
+                        final Duration queueToStartDuration = Duration.between(queueToFinishStart, startToFinishStart);
 
-                            progress.incrementAndGet();
-                            return new OperationResult(i, queueToFinishDuration, startToFinishDuration, queueToStartDuration);
-                        } finally {
-                            control.endCurrentTask();
-                        }
-                    });
+                        progress.incrementAndGet();
+                        return new OperationResult(i, queueToFinishDuration, startToFinishDuration, queueToStartDuration);
+                    }));
                 })
                 .collect(Collectors.toList()).stream()
                 .map(f -> {

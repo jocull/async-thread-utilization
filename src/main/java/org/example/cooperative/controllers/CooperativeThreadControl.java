@@ -3,10 +3,6 @@ package org.example.cooperative.controllers;
 import java.util.function.Supplier;
 
 public interface CooperativeThreadControl {
-    void startNewTask();
-
-    void endCurrentTask();
-
     void requestTime();
 
     void releaseTime();
