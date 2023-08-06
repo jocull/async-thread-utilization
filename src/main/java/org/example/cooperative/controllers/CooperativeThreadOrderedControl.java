@@ -33,14 +33,52 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
     }
 
     @Override
+    public void startNewTask() {
+        final ThreadState threadState = getThreadState();
+        try {
+            lock.lockInterruptibly();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new CooperativeThreadInterruptedException(ex);
+        }
+        if (threadState.rootTaskId != NO_TASK_ID) {
+            throw new IllegalStateException("Task was already started. TaskID = " + threadState.rootTaskId);
+        }
+        threadState.rootTaskId = ROOT_TASK_ID_COUNTER.getAndIncrement();
+        lock.unlock();
+    }
+
+    @Override
+    public void endCurrentTask() {
+        final ThreadState threadState = getThreadState();
+        try {
+            lock.lockInterruptibly();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new CooperativeThreadInterruptedException(ex);
+        }
+        if (threadState.rootTaskId == NO_TASK_ID) {
+            throw new IllegalStateException("Task was not started");
+        }
+        threadState.rootTaskId = NO_TASK_ID;
+        lock.unlock();
+    }
+
+    @Override
     public void requestTime() {
         final ThreadState threadState = getThreadState();
         try {
             lock.lockInterruptibly();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new CooperativeThreadInterruptedException(ex);
+        }
+
+        try {
             if (threadState.retainCounter == 0) {
                 // When acquiring the thread for the first time, set the root task ID
                 if (threadState.rootTaskId == NO_TASK_ID) {
-                    threadState.rootTaskId = ROOT_TASK_ID_COUNTER.getAndIncrement();
+                    throw new IllegalStateException("Task was not started");
                 }
 
                 // In observations, parallelism could get above the target somehow...
@@ -57,7 +95,8 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
                         // Interrupted before we could acquire the thread.
                         // Wipe out the root task time and propagate the error.
                         threadState.rootTaskId = NO_TASK_ID;
-                        throw ex;
+                        Thread.currentThread().interrupt();
+                        throw new CooperativeThreadInterruptedException(ex);
                     }
                 }
                 // Thread now held
@@ -65,9 +104,6 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
             }
             // Deepen the retain value
             threadState.retainCounter++;
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new CooperativeThreadInterruptedException(ex);
         } finally {
             lock.unlock();
         }
@@ -84,7 +120,6 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
                 // When there are no retainers left, give up the thread
                 if (threadState.retainCounter == 0) {
                     currentParallelism--;
-                    threadState.rootTaskId = NO_TASK_ID;
 
                     // Any waiters to give time to?
                     if (!waiters.isEmpty()) {

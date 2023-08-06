@@ -3,6 +3,26 @@ package org.example.cooperative.controllers;
 import java.util.function.Supplier;
 
 public interface CooperativeThreadControl {
+    void startNewTask();
+
+    void endCurrentTask();
+
+    default void runTask(Runnable runnable) {
+        runTask(() -> {
+            runnable.run();
+            return (Void) null;
+        });
+    }
+
+    default <T> T runTask(Supplier<T> supplier) {
+        startNewTask();
+        try {
+            return supplier.get();
+        } finally {
+            endCurrentTask();
+        }
+    }
+
     void requestTime();
 
     void releaseTime();

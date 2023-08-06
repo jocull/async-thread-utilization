@@ -103,13 +103,13 @@ public class Main implements CommandLineRunner {
 
         LOGGER.info("Filling the object pool...");
         objectPool = IntStream.range(0, 1000)
-                .mapToObj(i -> executor.submit(() -> {
+                .mapToObj(i -> executor.submit(() -> control.runTask(() -> {
                     // Manually set the accept type header to force string version of JSON
                     final HttpHeaders httpHeaders = new HttpHeaders();
                     httpHeaders.set(HttpHeaders.ACCEPT, "text/plain");
                     final RequestEntity<String> request = new RequestEntity<>(httpHeaders, HttpMethod.GET, URI.create("http://" + getNextHost() + "/"));
                     return restTemplate.exchange(request, String.class).getBody();
-                }))
+                })))
                 .collect(Collectors.toList())
                 .stream()
                 .map(f -> {
@@ -140,7 +140,7 @@ public class Main implements CommandLineRunner {
         IntStream.range(0, 10_000)
                 .mapToObj(i -> {
                     final Instant queueToFinishStart = Instant.now();
-                    return executor.submit(() -> control.tryRequestFor(() -> {
+                    return executor.submit(() -> control.runTask(() -> {
                         final Instant startToFinishStart = Instant.now();
 
                         final List<NetworkResult> networkResults = mockJitteryNetwork();
