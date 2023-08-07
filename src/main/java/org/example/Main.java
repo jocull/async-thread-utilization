@@ -153,9 +153,9 @@ public class Main implements CommandLineRunner {
         final OperationStatistics operationStatistics = new OperationStatistics();
         IntStream.range(0, 10_000)
                 .mapToObj(i -> {
-                    final Instant queueToFinishStart = Instant.now();
+                    final Instant queueTime = Instant.now();
                     return executor.submit(() -> control.runTask(() -> {
-                        final Instant startToFinishStart = Instant.now();
+                        final Instant startTime = Instant.now();
 
                         final List<NetworkResult> networkResults = mockJitteryNetwork();
                         final Map<String, Object> merged = new HashMap<>();
@@ -164,12 +164,9 @@ public class Main implements CommandLineRunner {
                         final NetworkResult mergedResult = parseNetworkResult(merged);
                         mockWriteNetwork(mergedResult);
 
-                        final Duration queueToFinishDuration = Duration.between(queueToFinishStart, Instant.now());
-                        final Duration startToFinishDuration = Duration.between(startToFinishStart, Instant.now());
-                        final Duration queueToStartDuration = Duration.between(queueToFinishStart, startToFinishStart);
-
+                        final Instant finishTime = Instant.now();
                         progress.incrementAndGet();
-                        return new OperationResult(i, queueToFinishDuration, startToFinishDuration, queueToStartDuration);
+                        return new OperationResult(i, queueTime, startTime, finishTime);
                     }));
                 })
                 .collect(Collectors.toList()).stream()
@@ -204,13 +201,17 @@ public class Main implements CommandLineRunner {
         final CSVFormat format = CSVFormat.Builder.create(CSVFormat.DEFAULT)
                 .setDelimiter(',')
                 .setQuote('"')
-                .setHeader("index", "queueToFinishDuration", "startToFinishDuration")
+                .setHeader("index", "queueTime", "startTime", "finishTime", "queueToStartDuration", "queueToFinishDuration", "startToFinishDuration")
                 .build();
         try (Writer writer = new FileWriter(filename);
              CSVPrinter printer = new CSVPrinter(writer, format)) {
             for (OperationResult result : sortedResults) {
                 printer.printRecord(
                         result.index,
+                        result.queueTime.toEpochMilli(),
+                        result.startTime.toEpochMilli(),
+                        result.finishTime.toEpochMilli(),
+                        result.queueToStartDuration.toMillis(),
                         result.queueToFinishDuration.toMillis(),
                         result.startToFinishDuration.toMillis());
             }
@@ -221,21 +222,30 @@ public class Main implements CommandLineRunner {
 
     private static class OperationResult {
         final int index;
+        final Instant queueTime;
+        final Instant startTime;
+        final Instant finishTime;
         final Duration queueToFinishDuration;
         final Duration startToFinishDuration;
         final Duration queueToStartDuration;
 
-        public OperationResult(int index, Duration queueToFinishDuration, Duration startToFinishDuration, Duration queueToStartDuration) {
+        public OperationResult(int index, Instant queueTime, Instant startTime, Instant finishTime) {
             this.index = index;
-            this.queueToFinishDuration = queueToFinishDuration;
-            this.startToFinishDuration = startToFinishDuration;
-            this.queueToStartDuration = queueToStartDuration;
+            this.queueTime = queueTime;
+            this.startTime = startTime;
+            this.finishTime = finishTime;
+            this.queueToFinishDuration = Duration.between(queueTime, finishTime);
+            this.startToFinishDuration = Duration.between(startTime, finishTime);
+            this.queueToStartDuration = Duration.between(queueTime, startTime);
         }
 
         @Override
         public String toString() {
             return "OperationResult{" +
                     "index=" + index +
+                    ", queueTime=" + queueTime +
+                    ", startTime=" + startTime +
+                    ", finishTime=" + finishTime +
                     ", queueToFinishDuration=" + queueToFinishDuration +
                     ", startToFinishDuration=" + startToFinishDuration +
                     ", queueToStartDuration=" + queueToStartDuration +
