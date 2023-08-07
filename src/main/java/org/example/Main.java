@@ -137,7 +137,9 @@ public class Main implements CommandLineRunner {
 
         // Drop all but the largest so runs can be better compared
         objectPool = List.of(
-                objectPool.stream().max(Comparator.comparingInt(String::length)).orElseThrow()
+                // objectPool.stream().max(Comparator.comparingInt(String::length)).orElseThrow() // take largest
+                // objectPool.stream().sorted(Comparator.comparingInt(String::length)).skip(objectPool.size() / 2).findFirst().orElseThrow() // take median
+                objectPool.stream().min(Comparator.comparingInt(String::length)).orElseThrow() // take smallest
         );
         LOGGER.info("Done - using item of length {}", objectPool.get(0).length());
 
@@ -347,7 +349,7 @@ public class Main implements CommandLineRunner {
                 .mapToObj(i -> {
                     control.tryYieldFor(() -> {
                         try {
-                            Thread.sleep(ThreadLocalRandom.current().nextLong(10, 20));
+                            Thread.sleep(ThreadLocalRandom.current().nextLong(50, 100));
                         } catch (InterruptedException ex) {
                             throw new CooperativeThreadInterruptedException(ex);
                         }
