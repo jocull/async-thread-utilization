@@ -42,6 +42,8 @@ public class Main implements CommandLineRunner {
     static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     static ExecutorService executor;
     static int threadCount = 1000;
+    static int parallelism = -1;
+    static boolean isCooperative = false;
     static CooperativeThreadControl control;
     static final List<String> hosts = List.of("localhost:3000");
     static final Iterator<String> hostIterator = Iterators.cycle(hosts);
@@ -50,6 +52,17 @@ public class Main implements CommandLineRunner {
 
     public static void main(String[] args) {
         try {
+            if (args.length > 2) {
+                try {
+                    parallelism = Integer.parseInt(args[2]);
+                } catch (Exception ex) {
+                    LOGGER.error("Can't parse parallelism", ex);
+                }
+            }
+            if (parallelism < 1) {
+                parallelism = Runtime.getRuntime().availableProcessors();
+            }
+
             if (args.length > 1) {
                 try {
                     threadCount = Integer.parseInt(args[1]);
@@ -59,14 +72,15 @@ public class Main implements CommandLineRunner {
             }
 
             executor = Executors.newFixedThreadPool(threadCount);
-            if (args.length > 0) {
-                if (args[0].equals("cooperative")) {
-                    control = CooperativeThreadControl.create(Runtime.getRuntime().availableProcessors());
-                } else {
-                    control = CooperativeThreadControl.none();
-                }
+            if (args.length > 0 && args[0].equals("cooperative")) {
+                control = CooperativeThreadControl.create(parallelism);
+                isCooperative = true;
             }
-            LOGGER.info("Running with executor type: {}, threads: {}", executor.getClass().getName(), threadCount);
+            if (control == null) {
+                parallelism = threadCount;
+                control = CooperativeThreadControl.none();
+            }
+            LOGGER.info("Running with control type: {}, threads: {}, parallelism: {}", control.getClass().getName(), threadCount, parallelism);
 
             LOGGER.info("STARTING THE APPLICATION");
             SpringApplication.run(Main.class, args);
@@ -179,7 +193,9 @@ public class Main implements CommandLineRunner {
         LOGGER.info("{}", operationStatistics.queueToFinishStats);
         LOGGER.info("{}", operationStatistics.startToFinishStats);
 
-        final String filename = "data-" + executor.getClass().getSimpleName() + "_" + threadCount + "-threads.csv";
+        final String filename = isCooperative
+                ? "data-" + control.getClass().getSimpleName() + "_" + threadCount + "-" + parallelism +  "-threads.csv"
+                : "data-" + control.getClass().getSimpleName() + "_" + threadCount + "-threads.csv";
         final List<OperationResult> sortedResults = operationStatistics.results.stream()
                 .sorted(Comparator.comparingInt(r -> r.index))
                 .collect(Collectors.toList());

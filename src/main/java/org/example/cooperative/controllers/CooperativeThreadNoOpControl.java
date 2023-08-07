@@ -1,6 +1,6 @@
 package org.example.cooperative.controllers;
 
-public class CooperativeThreadNoOpControl implements CooperativeThreadControl {
+class CooperativeThreadNoOpControl implements CooperativeThreadControl {
     @Override
     public void startNewTask() {
         // no-op

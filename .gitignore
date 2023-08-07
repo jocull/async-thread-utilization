@@ -36,6 +36,7 @@ build/
 
 ### Project data ###
 .~lock*
+~$*.xlsx
 data-*.csv
 data-*.xlsx
 *.jfr
