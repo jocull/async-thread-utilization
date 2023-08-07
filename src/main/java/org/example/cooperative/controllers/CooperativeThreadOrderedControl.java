@@ -60,6 +60,9 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
         if (threadState.rootTaskId == NO_TASK_ID) {
             throw new IllegalStateException("Task was not started");
         }
+        if (threadState.retainCounter > 0) {
+            throw new IllegalStateException("Ending task while still retained. Retained count = " + threadState.retainCounter);
+        }
         threadState.rootTaskId = NO_TASK_ID;
         lock.unlock();
     }
@@ -75,12 +78,10 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
         }
 
         try {
+            if (threadState.rootTaskId == NO_TASK_ID) {
+                throw new IllegalStateException("Requesting time for a task that was not started. Retained count = " + threadState.retainCounter);
+            }
             if (threadState.retainCounter == 0) {
-                // When acquiring the thread for the first time, set the root task ID
-                if (threadState.rootTaskId == NO_TASK_ID) {
-                    throw new IllegalStateException("Task was not started");
-                }
-
                 // In observations, parallelism could get above the target somehow...
                 // This loops helps guard against wake-ups where we aren't actually ready to start
                 while (currentParallelism >= targetParallelism) {
@@ -114,6 +115,9 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
         final ThreadState threadState = getThreadState();
         lock.lock();
         try {
+            if (threadState.rootTaskId == NO_TASK_ID) {
+                throw new IllegalStateException("Releasing time for a task that was not started. Retained count = " + threadState.retainCounter);
+            }
             if (threadState.retainCounter >= 1) {
                 threadState.retainCounter--;
 
@@ -132,7 +136,7 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
                         w.condition.signal();
                     }
                 }
-            } else if (threadState.retainCounter < 0) {
+            } else {
                 throw new IllegalStateException("Tried to release a thread that was never retained. " +
                         "Retained count = " + threadState.retainCounter);
             }

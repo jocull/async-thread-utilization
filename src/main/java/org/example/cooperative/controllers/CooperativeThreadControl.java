@@ -16,9 +16,11 @@ public interface CooperativeThreadControl {
 
     default <T> T runTask(Supplier<T> supplier) {
         startNewTask();
+        requestTime();
         try {
             return supplier.get();
         } finally {
+            releaseTime();
             endCurrentTask();
         }
     }
