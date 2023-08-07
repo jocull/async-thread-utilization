@@ -160,5 +160,13 @@ class CooperativeThreadOrderedControl implements CooperativeThreadControl {
         public int compareTo(ThreadState o) {
             return Long.compare(rootTaskId, o.rootTaskId);
         }
+
+        @Override
+        public String toString() {
+            return "ThreadState{" +
+                    "rootTaskId=" + rootTaskId +
+                    ", retainCounter=" + retainCounter +
+                    '}';
+        }
     }
 }
