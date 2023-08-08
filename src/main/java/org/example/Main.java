@@ -143,6 +143,20 @@ public class Main implements CommandLineRunner {
         );
         LOGGER.info("Done - using item of length {}", objectPool.get(0).length());
 
+        LOGGER.info("Doing warm-up to eliminate some JIT");
+        IntStream.range(0, 100)
+                .mapToObj(i -> getOperationResultFuture(new AtomicInteger(), i))
+                .collect(Collectors.toList()).stream()
+                .map(f -> {
+                    try {
+                        return f.get();
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                })
+                .forEach(o -> { /* no op */ });
+        LOGGER.info("Done with JIT warm-up");
+
         final AtomicInteger progress = new AtomicInteger();
         final AtomicLong lastHeartbeat = new AtomicLong(System.currentTimeMillis());
         scheduledExecutor.scheduleWithFixedDelay(() -> {
@@ -154,23 +168,7 @@ public class Main implements CommandLineRunner {
         final Instant totalStart = Instant.now();
         final OperationStatistics operationStatistics = new OperationStatistics();
         IntStream.range(0, 10_000)
-                .mapToObj(i -> {
-                    final Instant queueTime = Instant.now();
-                    return executor.submit(() -> control.runTask(() -> {
-                        final Instant startTime = Instant.now();
-
-                        final List<NetworkResult> networkResults = mockJitteryNetwork();
-                        final Map<String, Object> merged = new HashMap<>();
-                        networkResults.forEach(nr -> merged.putAll(nr.data));
-
-                        final NetworkResult mergedResult = parseNetworkResult(merged);
-                        mockWriteNetwork(mergedResult);
-
-                        final Instant finishTime = Instant.now();
-                        progress.incrementAndGet();
-                        return new OperationResult(i, queueTime, startTime, finishTime);
-                    }));
-                })
+                .mapToObj(i -> getOperationResultFuture(progress, i))
                 .collect(Collectors.toList()).stream()
                 .map(f -> {
                     try {
@@ -193,7 +191,7 @@ public class Main implements CommandLineRunner {
         LOGGER.info("{}", operationStatistics.startToFinishStats);
 
         final String filename = isCooperative
-                ? "data-" + control.getClass().getSimpleName() + "_" + threadCount + "-" + parallelism +  "-threads.csv"
+                ? "data-" + control.getClass().getSimpleName() + "_" + threadCount + "-" + parallelism + "-threads.csv"
                 : "data-" + control.getClass().getSimpleName() + "_" + threadCount + "-threads.csv";
         final List<OperationResult> sortedResults = operationStatistics.results.stream()
                 .sorted(Comparator.comparingInt(r -> r.index))
@@ -220,6 +218,26 @@ public class Main implements CommandLineRunner {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private Future<OperationResult> getOperationResultFuture(AtomicInteger progress, int i) {
+        // System.out.println(Instant.now() + " START TASK " + i);
+        final Instant queueTime = Instant.now();
+        return executor.submit(() -> control.runTask(() -> {
+            final Instant startTime = Instant.now();
+
+            final List<NetworkResult> networkResults = mockJitteryNetwork();
+            final Map<String, Object> merged = new HashMap<>();
+            networkResults.forEach(nr -> merged.putAll(nr.data));
+
+            final NetworkResult mergedResult = parseNetworkResult(merged);
+            mockWriteNetwork(mergedResult);
+
+            final Instant finishTime = Instant.now();
+            progress.incrementAndGet();
+            // System.out.println(Instant.now() + " END TASK " + i);
+            return new OperationResult(i, queueTime, startTime, finishTime);
+        }));
     }
 
     private static class OperationResult {
