@@ -135,7 +135,7 @@ public class Main implements CommandLineRunner {
                 })
                 .collect(Collectors.toList());
 
-        // Drop all but the largest so runs can be better compared
+        // Drop all but one so runs can be better compared
         objectPool = List.of(
                 // objectPool.stream().max(Comparator.comparingInt(String::length)).orElseThrow() // take largest
                 // objectPool.stream().sorted(Comparator.comparingInt(String::length)).skip(objectPool.size() / 2).findFirst().orElseThrow() // take median
